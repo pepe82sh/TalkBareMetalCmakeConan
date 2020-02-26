@@ -25,6 +25,57 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
+                <section>
+                    <h2>Goals</h2>
+                    <ul>
+                        <li class="fragment fade-in-then-semi-out">IDE agnostic build toolchain</li>
+                        <li class="fragment fade-in-then-semi-out">As little requirements on the devs machine as possible</li>
+                        <li class="fragment fade-in-then-semi-out">Manage dependencies in a sane way</li>
+                        <li class="fragment fade-in-then-semi-out">FW devs should be able to use libs as easy as possible</li>
+                    </ul>
+                    <aside class="notes">
+                        Vendor crapware<br/><br/>
+                        Different libs, paths, installs<br/><br/>
+                        Insanity: SVN externals, manual include paths for every (sub-)dependency<br/><br/>
+                        No complicated boilerplate. Provide information neccessarry, no more.
+                    </aside>
+                </section>
+                <section>
+                    <h2>Early decisions</h2>
+                    <ul>
+                        <li class="fragment fade-in-then-semi-out">Base our build process on cmake</li>
+                        <li class="fragment fade-in-then-semi-out">Utilize conan for packaging and depedency management</li>
+                    </ul>
+                </section>
+				<section>
+                    <h2>Quick introduction to CMake</h2>
+                    <pre>CMakeLists.txt<code data-trim data-noescape data-line-numbers>
+                    cmake_minimum_required (VERSION 3.12)
+
+                    project(FancyProject)
+
+                    add_library(fancyUtils)
+                    target_sources(fancyUtils PRIVATE wow.cpp)
+                    target_include_directories(fancyUtils PUBLIC include)
+
+                    add_executable(amazeMe)
+                    target_sources(amazeMe PRIVATE main.cpp)
+                    target_link_libraries(amazeMe PUBLIC fancyUtils)
+                    </code></pre>
+                </section>
+                <section>
+                    <h2>Quick introduction to conan</h2>
+                    <pre>conanfile.txt<code data-trim data-noescape data-line-numbers>
+                        [requires]
+                        Diagnostics/0.9.4@euroimmun/release
+                        googletest/1.8.1.0@euroimmun/release
+                    </code></pre>
+                    <pre>conanfile.py<code data-trim data-noescape data-line-numbers>
+                        [requires]
+                        Diagnostics/0.9.4@euroimmun/release
+                        googletest/1.8.1.0@euroimmun/release
+                    </code></pre>
+                </section>
 				<section>
                     <p class="fragment highlight-green">Fancy Section</p>
                     <a href="https://github.com/conan-io/conan/issues/86">https://github.com/conan-io/conan/issues/86</a>
