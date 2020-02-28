@@ -50,17 +50,17 @@
 				<section>
                     <h2>Quick introduction to CMake</h2>
                     <pre>CMakeLists.txt<code data-trim data-noescape data-line-numbers>
-                    cmake_minimum_required (VERSION 3.12)
+                        cmake_minimum_required (VERSION 3.12)
 
-                    project(FancyProject)
+                        project(FancyProject)
 
-                    add_library(fancyUtils)
-                    target_sources(fancyUtils PRIVATE wow.cpp)
-                    target_include_directories(fancyUtils PUBLIC include)
+                        add_library(fancyUtils)
+                        target_sources(fancyUtils PRIVATE wow.cpp)
+                        target_include_directories(fancyUtils PUBLIC include)
 
-                    add_executable(amazeMe)
-                    target_sources(amazeMe PRIVATE main.cpp)
-                    target_link_libraries(amazeMe PUBLIC fancyUtils)
+                        add_executable(amazeMe)
+                        target_sources(amazeMe PRIVATE main.cpp)
+                        target_link_libraries(amazeMe PUBLIC fancyUtils)
                     </code></pre>
                 </section>
                 <section>
@@ -74,6 +74,130 @@
                         [requires]
                         Diagnostics/0.9.4@euroimmun/release
                         googletest/1.8.1.0@euroimmun/release
+                    </code></pre>
+                    <pre>MyProfile<code data-trim data-noescape data-line-numbers>
+                        [requires]
+                        Diagnostics/0.9.4@euroimmun/release
+                        googletest/1.8.1.0@euroimmun/release
+                    </code></pre>
+                </section>
+                <section>
+                    <section>
+                        <h2>Putting it together</h2>
+                        <ul>
+                            <li class="fragment fade-in-then-semi-out">All dependencies and tools will be provided by conan</li>
+                            <li class="fragment fade-in-then-semi-out">Different targets will be distiguished by the conan profiles</li>
+                            <li class="fragment fade-in-then-semi-out">The cmake toolchain will be injected by the compiler package</li>
+                            <li class="fragment fade-in-then-semi-out">Target specific settings will be injected by a build_settings package</li>
+                        </ul>
+                        <h1>Diagram</h1>
+                    </section>
+                    <section>
+                        <h2>The compiler package</h2>
+                        <pre class="stretch">conanfile.py<code data-trim data-noescape>
+                            # ...
+
+                            class ArmgccInstallerConan(ConanFile):
+                                
+                                # ...
+                                
+                                settings = {
+                                    "os_build": ["Windows"],
+                                    "compiler": {"gcc": {"version":["4.7","4.9","5.4","6","7","8"]}}
+                                }
+                                exports_sources = "toolchain/*"
+
+                                def build(self):
+                                    zip_name = "arm-gcc.zip"
+                                    url = get_download_url(str(self.settings.os_build), str(self.settings.compiler.version))
+                                    copyfile(url, zip_name)
+                                    tools.unzip(zip_name, "arm-gcc")
+
+                                def package(self):
+                                    self.copy("*", dst="", src="arm-gcc")
+                                    self.copy("*", dst="toolchain", src="toolchain")
+
+                                def package_info(self):
+                                    self.env_info.path.append(os.path.join(self.package_folder, "bin"))
+                                    self.env_info.CONAN_CMAKE_TOOLCHAIN_FILE = os.path.join(self.package_folder, "toolchain/arm-gcc-toolchain.cmake")
+
+                                # ...
+                        </code>Fork of <a href="https://github.com/omicronns/conan-arm-none-eabi-gcc-installer">omicronns/conan-arm-none-eabi-gcc-installer</a> by Konrad Adasiewicz</pre>
+                    </section>
+                    <section>
+                        <h2>The build_settings package</h2>
+                        <pre>conanfile.py<code data-trim data-noescape>
+                            # ...
+
+                            class CompilerSettingsConan(ConanFile):
+                                # ...
+                                settings = {"arch" : ["x86", "armv7"], "compiler" : ["gcc"]}
+
+                                # ...
+
+                                def package(self):
+                                    if self.settings.arch == "x86":
+                                        self.copy("*", dst="", src="cmake_includes/PC")
+                                    elif self.settings.arch == "armv7":
+                                        self.copy("*", dst="", src="cmake_includes/XMC4000")
+                        </code></pre>
+                        <pre>build_settings.cmake<code data-trim data-noescape>
+                            set(CPU "-mcpu=cortex-m4")
+                            set(FPU "-mfpu=fpv4-sp-d16")
+                            set(FLOAT_ABI "-mfloat-abi=softfp")
+                            set(MCU "${CPU} -mthumb ${FPU} ${FLOAT_ABI}")
+
+                            # options
+                            set(OPT_C   "-fdata-sections -ffunction-sections -fmessage-length=0 --exceptions")
+                            set(OPT_CPP "-fdata-sections -ffunction-sections -fmessage-length=0 -fno-rtti --exceptions")
+
+                            SET(CMAKE_C_FLAGS           "${CMAKE_C_FLAGS} ${MCU} ${WARN} ${OPT_C}")
+                            SET(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} ${MCU} ${WARN} ${OPT_CPP}")
+
+                            # ...
+                        </code></pre>
+                    </section>
+                </section>
+                <section>
+                    <h2>Build a firmware</h2>
+                    <pre>CMakeLists.txt<code data-trim data-noescape>
+                        cmake_minimum_required (VERSION 3.12)
+
+                        project(FancyProject)
+
+                        include(${CMAKE_BINARY_DIR}/conan_paths.cmake)
+                        find_package(fancyUtils)
+
+                        add_executable(amazeMe)
+                        target_sources(amazeMe PRIVATE main.cpp)
+                        target_link_libraries(amazeMe PUBLIC fancyUtils)
+                    </code></pre>
+                    <pre>conanfile.txt<code data-trim data-noescape>
+                        [requires]
+                        fancyUtils/1.2.3@euroimmun/release
+
+                        [generators]
+                        cmake_paths
+                    </code></pre>
+                    <pre>Profile<code data-trim data-noescape>
+                        include(default)
+
+                        [build_requires]
+                        cmake_toolchain_generator/2.0.0@euroimmun/release
+                        cmake_utils/0.1.1@euroimmun/release
+                        arm-gcc_installer/1.1.0@euroimmun/release
+                        compiler_settings/2.0.2@euroimmun/release
+                        dave_helper/1.0.1@euroimmun/release
+
+
+                        [settings]
+                        arch=armv7
+                        compiler=gcc
+                        compiler.version=7
+                        compiler.libcxx=libstdc++11
+                        cppstd=gnu17
+                        controller=XMC4500
+                        dave_version=dave4
                     </code></pre>
                 </section>
 				<section>
@@ -102,11 +226,24 @@
                 width: 1920,
                 height: 1080,
                 margin: 0.1,
+
+                notes_pointer: {
+                    pointer: {
+                        size: 15,
+                        color: 'rgba(255,0,0,0.8)',
+                        key: 'A'
+                    },
+                    notes: {
+                        key: 'S'
+                    }
+                },
+
 				dependencies: [
 					{ src: 'plugin/markdown/marked.js' },
 					{ src: 'plugin/markdown/markdown.js' },
 					{ src: 'plugin/notes/notes.js', async: true },
-					{ src: 'plugin/highlight/highlight.js', async: true }
+					{ src: 'plugin/highlight/highlight.js', async: true },
+                    { src: 'node_modules/reveal.js-notes-pointer/notes-pointer.js', async: true },
 				]
 			});
 		</script>
